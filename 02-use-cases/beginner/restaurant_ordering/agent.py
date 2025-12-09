@@ -146,8 +146,6 @@ class CountInvocationPlugin(BasePlugin):
 
 root_agent = order_agent
 
-# about how to use context compaction, please refer to:
-# https://google.github.io/adk-docs/context/compaction/#example-of-context-compaction
 app = App(
     name="restaurant_ordering",
     root_agent=root_agent,
@@ -167,35 +165,10 @@ app = App(
     ),
 )
 
-# runner = Runner(agent=root_agent)
-
-# simple = AgentkitSimpleApp()
-
-# @simple.entrypoint
-# async def run(payload: dict, headers: dict) -> str:
-#     prompt = payload["prompt"]
-#     user_id = headers["user_id"]
-#     session_id = headers["session_id"]
-
-#     logger.info(
-#         f"Running agent with prompt: {prompt}, user_id: {user_id}, session_id: {session_id}"
-#     )
-#     try:
-#         response = await runner.run(messages=prompt, user_id=user_id, session_id=session_id)
-#     except Exception as e:
-#         logger.error(f"Error running agent: {e}")
-#         raise e
-
-#     logger.info(f"Run response: {response}")
-#     return response
-# uvicorn.run(simple, host="0.0.0.0", port=8000)
-
 agent_server_app = AgentkitAgentServerApp(
     agent=root_agent,
     short_term_memory=short_term_memory,
 )
 
 if __name__ == "__main__":
-    # Uncomment the following line to run the agentkit app server
-    # uvicorn.run(simple, host="0.0.0.0", port=8000)
     agent_server_app.run(host="0.0.0.0", port=8000)

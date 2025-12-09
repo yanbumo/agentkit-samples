@@ -1,91 +1,438 @@
-# 餐厅点餐 Agent (`restaurant_ordering`)
+# Restaurant Ordering - 餐厅点餐智能助手
 
-本项目展示了一个高级 Agent，其设计目标是成为一个友好且高效的餐厅点餐助手。它展示了 Agent 开发套件（ADK）的几个核心能力。
+基于火山引擎 VeADK 构建的高级点餐 Agent，展示如何实现复杂业务流程、异步工具调用、上下文管理和自定义插件等高级特性。
 
-## 核心功能
+## 📋 概述
 
-该 Agent 的主要目标是帮助用户从预定义的菜单中点餐。它可以：
+本示例是一个功能完善的餐厅点餐助手，展示 VeADK 的多项高级能力：
 
--   **接收订单**: 理解用户的请求（例如，“我想要一些辣的菜”）并将其与菜单项进行匹配。
--   **添加到订单**: 使用 `add_to_order` 工具将具体的菜品添加到用户的购物车中。
--   **汇总订单**: 使用 `summarize_order` 工具在结账前展示最终的菜品列表。
--   **处理菜单外请求**: 当用户想点的菜不在菜单上时，Agent会利用`web_search`工具进行网络搜索，并与用户确认是否作为特殊菜品下单。
+- 异步工具与并行调用：同时处理多个菜品订单
+- 高级上下文管理：事件压缩和上下文过滤
+- 状态管理：使用 ToolContext 维护订单状态
+- 自定义插件：监控 Agent 运行次数和 LLM 调用
+- Web 搜索集成：处理菜单外的特殊需求
 
-## 特殊能力与高级特性
+## 🏗️ 架构
 
-该 Agent 不仅仅局限于基础对话，还展示了几个强大的高级特性：
+```
+用户点餐请求
+    ↓
+Restaurant Ordering Agent
+    ├── 菜单匹配（语义理解）
+    ├── 并行工具调用
+    │   ├── add_to_order (添加菜品)
+    │   ├── summarize_order (汇总订单)
+    │   └── web_search (菜单外查询)
+    │
+    ├── 状态管理 (ToolContext)
+    │   └── order: [] (订单列表)
+    │
+    └── 插件系统
+        ├── CountInvocationPlugin (计数插件)
+        ├── ContextFilterPlugin (上下文过滤)
+        └── EventsCompactionConfig (事件压缩)
+```
 
-### 1. 异步工具与并行调用
+### 核心组件
 
-为了提升响应效率，本项目中的工具（如 `add_to_order`）被定义为异步函数（`async def`）。更重要的是，在 Agent 的核心指令（Instruction）中，明确鼓励模型在需要时**并行调用**这些工具。
+| 组件                 | 描述                                             |
+| -------------------- | ------------------------------------------------ |
+| **Agent 服务** | [agent.py](agent.py:82-117) - order_agent，点餐助手 |
+| **测试脚本**   | [main.py](main.py) - 完整的点餐流程演示             |
+| **自定义工具** | add_to_order, summarize_order                    |
+| **自定义插件** | CountInvocationPlugin - 统计调用次数             |
+| **上下文管理** | EventsCompactionConfig + ContextFilterPlugin     |
 
-> **提示词指令**: `You can using parallel invocations to add multiple dishes to the order.`
+### 代码特点
 
-这意味着当用户一次性说出“我要一个宫保鸡丁和一份饺子”时，Agent 可以同时发起两个 `add_to_order` 的工具调用，从而显著加快处理速度。
+**异步工具定义**（[agent.py](agent.py:52-79)）：
 
-### 2. 高级上下文管理与压缩
+```python
+async def add_to_order(dish_name: str, tool_context: ToolContext = None) -> str:
+    """Adds a dish to the user's order."""
+    if "order" not in tool_context.state:
+        tool_context.state["order"] = []
 
-为了在长对话中保持高效并节省成本，本项目运用了两种高级上下文管理技术：
+    tool_context.state["order"] = tool_context.state["order"] + [dish_name]
+    return f"I've added {dish_name} to your order."
 
--   **事件压缩 (`EventsCompactionConfig`)**: 这是本项目的亮点之一。通过配置 `EventsCompactionConfig`，Agent 可以自动将多轮对话历史进行“压缩”，生成一个简洁的摘要。这避免了在每次请求时都传递完整的、冗长的对话历史，极大地节省了 Token 数量。
-    > **代码注释**: `events_compaction_config 用于配置事件压缩，以在长对话中节省上下文。`
--   **上下文过滤器 (`ContextFilterPlugin`)**: 作为补充，`ContextFilterPlugin` 插件被用来精确控制保留最近的几轮对话（例如，保留最近8轮），确保核心上下文不丢失。
+async def summarize_order(tool_context: ToolContext = None) -> str:
+    """Summarizes the user's current order."""
+    order = tool_context.state.get("order", [])
+    if not order:
+        return "You haven't ordered anything yet."
 
-### 3. 使用 `ToolContext` 进行状态管理
+    summary = "Here is your order so far:\n" + "\n".join(f"- {dish}" for dish in order)
+    return summary
+```
 
-Agent 能够在多轮对话中持续维护用户的订单状态。它通过使用 `tool_context.state` 字典来实现这一点，这是一个在工具调用之间传递和共享的持久化状态。
+**Agent 配置与并行调用**（[agent.py](agent.py:82-117)）：
 
--   `add_to_order` 工具会将新菜品添加到一个位于 `tool_context.state["order"]` 内的列表中。
--   `summarize_order` 工具会从这个共享状态中读取数据，以提供完整的订单摘要。
+```python
+order_agent = Agent(
+    name="restaurant_ordering_agent",
+    description="An agent that takes customer orders at a restaurant.",
+    instruction=f"""
+        You are a friendly and efficient order-taking assistant for a restaurant.
+        The menu contains: {", ".join(RECIPES)}.
 
-### 4. 自定义插件 (`CountInvocationPlugin`)
+        **Workflow:**
+        1. Understand the user's request and match to menu items.
+        2. You MUST call the `add_to_order` tool. You can using parallel invocations
+           to add multiple dishes to the order.
+        3. Handle off-menu requests using `web_search` tool.
+        4. When finished, call `summarize_order` tool.
+    """,
+    tools=[add_to_order, summarize_order, web_search],
+)
+```
 
-该项目包含一个自定义插件 `CountInvocationPlugin`，它会挂载到 Agent 的生命周期中，用于实时统计 Agent 的运行次数和底层大语言模型（LLM）的调用次数。
+**自定义插件**（[agent.py](agent.py:120-144)）：
 
-这演示了如何利用插件机制对 Agent 的内部行为进行监控、记录日志或注入自定义逻辑，为 Agent 的可观测性提供了强大的支持。
+```python
+class CountInvocationPlugin(BasePlugin):
+    """A custom plugin that counts agent and tool invocations."""
 
-## 运行方法
-### 1. 安装veadk和agentkit python sdk 配置环境变量
+    def __init__(self) -> None:
+        super().__init__(name="count_invocation")
+        self.agent_count: int = 0
+        self.llm_request_count: int = 0
+
+    async def before_agent_callback(
+        self, *, agent: BaseAgent, callback_context: CallbackContext
+    ) -> None:
+        self.agent_count += 1
+        print(f"[Plugin] Agent run count: {self.agent_count}")
+
+    async def before_model_callback(
+        self, *, callback_context: CallbackContext, llm_request: LlmRequest
+    ) -> None:
+        self.llm_request_count += 1
+        print(f"[Plugin] LLM request count: {self.llm_request_count}")
+```
+
+**上下文管理配置**（[agent.py](agent.py:151-167)）：
+
+```python
+app = App(
+    name="restaurant_ordering",
+    root_agent=root_agent,
+    plugins=[
+        CountInvocationPlugin(),
+        ContextFilterPlugin(num_invocations_to_keep=8),  # 保留最近8轮对话
+        SaveFilesAsArtifactsPlugin(),
+    ],
+    # 事件压缩：每3次调用触发一次压缩
+    events_compaction_config=EventsCompactionConfig(
+        compaction_interval=3,
+        overlap_size=1,
+    ),
+)
+```
+
+## 🚀 快速开始
+
+### 前置条件
+
+**重要提示**：在运行本示例之前，请先访问 [AgentKit 控制台授权页面](https://console.volcengine.com/agentkit/region:agentkit+cn-beijing/auth?projectName=default) 对所有依赖服务进行授权，确保案例能够正常执行。
+
+**1. 开通火山方舟模型服务**
+
+- 访问 [火山方舟控制台](https://exp.volcengine.com/ark?mode=chat)
+- 开通模型服务
+
+**2. 获取火山引擎访问凭证**
+
+- 参考 [用户指南](https://www.volcengine.com/docs/6291/65568?lang=zh) 获取 AK/SK
+
+### 安装步骤
+
+#### 1. 安装 uv 包管理器
 
 ```bash
+# macOS / Linux（官方安装脚本）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 或使用 Homebrew（macOS）
+brew install uv
+```
+
+#### 2. 初始化项目依赖
+
+```bash
+cd 02-use-cases/beginner/restaurant_ordering
+
+# 安装 VeADK 和 AgentKit SDK
 uv pip install veadk-python
 uv pip install agentkit-sdk-python
 ```
 
-### 2. 运行本地命令行测试
+#### 3. 配置环境变量
+
 ```bash
-python main.py
+# 火山方舟模型名称
+export MODEL_AGENT_NAME=doubao-seed-1-6-251015
+
+# 火山引擎访问凭证（必需）
+export VOLCENGINE_ACCESS_KEY=<Your Access Key>
+export VOLCENGINE_SECRET_KEY=<Your Secret Key>
 ```
 
-### 3. 运行veadk web客户端并使用浏览器登录 http://127.0.0.1:8000
+### 运行方式
+
+#### 方式一：部署到 AgentKit 平台（推荐）
+
 ```bash
+cd restaurant_ordering
+
+# 配置部署参数
+agentkit config
+
+# 启动云端服务
+agentkit launch
+
+# 测试部署的 Agent
+agentkit invoke '你好，我想吃点辣的。'
+```
+
+#### 方式二：使用 VeADK Web 调试界面
+
+```bash
+# 进入上级目录
 cd ..
+
+# 启动 VeADK Web 界面
 veadk web
 
+# 在浏览器访问：http://127.0.0.1:8000
 ```
 
-### 4. 部署到vefaas
-> **安全提示：请勿在生产环境中禁用密钥认证。确保 `VEFAAS_ENABLE_KEY_AUTH` 保持为 `true`（或不设置，默认为开启），并正确配置访问密钥和角色。只有在本地受控环境调试时，才可临时关闭认证，并务必加以警告。**
+Web 界面提供图形化对话测试环境，支持实时查看订单状态和调试信息。
+
+#### 方式三：命令行测试（推荐学习）
+
+```bash
+# 运行完整的点餐流程演示
+python main.py
+
+# 或直接启动 Agent 服务
+python agent.py
+# 服务将监听 http://0.0.0.0:8000
+```
+
+#### 方式四：部署到火山引擎 veFaaS
+
+**安全提示**：
+
+> 以下命令仅用于开发测试。生产环境必须启用 `VEFAAS_ENABLE_KEY_AUTH=true`（默认值）并配置 IAM 角色。
 
 ```bash
 cd restaurant_ordering
-# 这一步直接运行即可
+
+# 配置环境变量（仅测试用）
 export VEFAAS_ENABLE_KEY_AUTH=false
-# 这一步需要把YOUR_AK换成自己的ak
-export VOLCENGINE_ACCESS_KEY=YOUR_AK
-# 这一步需要把YOUR_AK换成自己的sk
-export VOLCENGINE_SECRET_KEY=YOUR_SK
-# 这一步部署应用到云上
-veadk deploy --vefaas-app-name=order-agent --use-adk-web --veapig-instance-name=<your veapig instance name> --iam-role "trn:iam::<your account id>:role/<your iam role name>"
+export VOLCENGINE_ACCESS_KEY=<Your Access Key>
+export VOLCENGINE_SECRET_KEY=<Your Secret Key>
 
+# 基础部署（快速开始）
+veadk deploy --vefaas-app-name=order-agent --use-adk-web
+
+# 生产级部署（推荐）
+veadk deploy \
+  --vefaas-app-name=order-agent \
+  --use-adk-web \
+  --veapig-instance-name=<Your veaPIG Instance> \
+  --iam-role "trn:iam::<Your Account ID>:role/<Your IAM Role>"
 ```
 
-### 5. 部署到AgentKit 并且使用client.py测试
+## 💡 示例对话
 
-```bash
-cd restaurant_ordering
-# Uncomment the following line in agent.py to run the agentkit app server
-# agent_server_app.run(host="0.0.0.0", port=8000)
-agentkit config
-agentkit launch
+### 基础点餐流程
+
+**单品点餐**：
+
 ```
+用户：你好，我想吃点辣的。
+Agent：我推荐宫保鸡丁，这是一道经典的辣味菜品。
+      [调用 add_to_order("Kung Pao Chicken")]
+      已为您添加宫保鸡丁。
+
+用户：再来一份饺子。
+Agent：好的！
+      [调用 add_to_order("Dumplings")]
+      已为您添加饺子。
+
+用户：我点完了，结账。
+Agent：[调用 summarize_order]
+      这是您的订单：
+      - Kung Pao Chicken
+      - Dumplings
+```
+
+### 并行工具调用
+
+**一次点多个菜品**：
+
+```
+用户：我要一个宫保鸡丁和一份饺子。
+Agent：好的！
+      [并行调用 add_to_order("Kung Pao Chicken")]
+      [并行调用 add_to_order("Dumplings")]
+      已为您添加宫保鸡丁和饺子。
+```
+
+### 菜单外请求
+
+**特殊菜品查询**：
+
+```
+用户：你们有螃蟹做的菜吗？
+Agent：[调用 web_search 搜索螃蟹菜品信息]
+      我们的菜单上没有螃蟹菜品，但我可以为您向厨房询问是否可以制作。
+      您想要点一份特制螃蟹菜吗？
+
+用户：听起来不错，就按你说的做一份吧。
+Agent：[调用 add_to_order("Special Crab Dish")]
+      已为您添加特制螃蟹菜。
+```
+
+### 完整对话流程
+
+运行 `main.py` 可以看到完整的点餐演示：
+
+```python
+prompts = [
+    "你好，我想吃点辣的。",
+    "你们有螃蟹做的菜吗？",
+    "听起来不错，就按你说的做一份吧。",
+    "再来一份宫保鸡丁。",
+    "我点完了，结账。",
+]
+```
+
+输出：
+
+```
+[Plugin] Agent run count: 1
+[Plugin] LLM request count: 1
+** User says: 你好，我想吃点辣的。
+** restaurant_ordering_agent: 我推荐宫保鸡丁...
+
+[Plugin] Agent run count: 2
+[Plugin] LLM request count: 2
+** User says: 你们有螃蟹做的菜吗？
+** restaurant_ordering_agent: 让我查询一下...
+
+...
+
+** restaurant_ordering_agent: 这是您的订单：
+- Kung Pao Chicken
+- Special Crab Dish
+- Kung Pao Chicken
+```
+
+## 📂 目录结构
+
+```
+restaurant_ordering/
+├── agent.py           # Agent 应用入口（高级特性示例）
+├── main.py            # 完整的点餐流程演示脚本
+├── requirements.txt   # Python 依赖列表 （agentkit部署时需要指定依赖文件)
+└── README.md          # 项目说明文档
+```
+
+## 🔍 技术要点
+
+### 1. 异步工具与并行调用
+
+**异步定义**：
+
+```python
+async def add_to_order(dish_name: str, tool_context: ToolContext = None) -> str:
+    # 异步函数支持并发执行
+    ...
+```
+
+**并行调用提示**：
+
+```
+You can using parallel invocations to add multiple dishes to the order.
+```
+
+Agent 可以同时发起多个工具调用，显著提升处理速度。
+
+### 2. 高级上下文管理
+
+**事件压缩（EventsCompactionConfig）**：
+
+- 自动将多轮对话历史压缩为摘要
+- 节省 Token 数量，降低成本
+- 配置：每 3 次调用触发一次压缩
+
+**上下文过滤（ContextFilterPlugin）**：
+
+- 精确控制保留的对话轮数
+- 配置：保留最近 8 轮对话
+- 确保核心上下文不丢失
+
+### 3. 状态管理（ToolContext）
+
+**共享状态**：
+
+```python
+# 添加菜品
+tool_context.state["order"] = tool_context.state["order"] + [dish_name]
+
+# 读取订单
+order = tool_context.state.get("order", [])
+```
+
+`tool_context.state` 在工具调用之间持久化，实现状态共享。
+
+### 4. 自定义插件
+
+**插件钩子**：
+
+- `before_agent_callback`: Agent 运行前
+- `before_model_callback`: LLM 调用前
+
+**可观测性**：
+
+- 统计 Agent 运行次数
+- 统计 LLM 调用次数
+- 监控性能和成本
+
+### 5. 语义理解与菜单匹配
+
+Agent 能够：
+
+- 理解模糊需求（"辣的"→宫保鸡丁）
+- 匹配菜单项（"鸡肉菜"→Kung Pao Chicken）
+- 处理同义词和多种表达方式
+
+### AgentKit 集成
+
+```python
+from agentkit.apps import AgentkitAgentServerApp
+
+agent_server_app = AgentkitAgentServerApp(
+    agent=root_agent,
+    short_term_memory=short_term_memory,
+)
+```
+
+## 🎯 下一步
+
+完成 Restaurant Ordering 示例后，可以探索更多功能：
+
+1. **[A2A Simple](../a2a_simple/README.md)** - 学习 Agent-to-Agent 通信协议
+2. **[Multi Agents](../multi_agents/README.md)** - 构建更复杂的多智能体协作系统
+3. **[Travel Concierge](../travel_concierge/README.md)** - 使用 Web 搜索工具规划旅行
+4. **[Video Generator](../../video_gen/README.md)** - 高级视频生成示例
+
+## 📖 参考资料
+
+- [VeADK 官方文档](https://volcengine.github.io/veadk-python/)
+- [AgentKit 开发指南](https://volcengine.github.io/agentkit-sdk-python/)
+- [火山方舟模型服务](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&projectName=default)
+- [Google ADK 上下文压缩](https://google.github.io/adk-docs/context/compaction/)

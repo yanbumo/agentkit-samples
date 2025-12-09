@@ -11,6 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .agent import root_agent  # noqa
+# 注意：此模块不适合在 veadk web 中自动加载
+# a2a_simple 需要先启动远程服务，然后才能运行客户端
+# 请参考 README.md 中的运行方式说明
 
-__all__ = ["root_agent"]
+# 不导入 root_agent，避免在模块加载时初始化 RemoteVeAgent
+# from .agent import root_agent  # noqa

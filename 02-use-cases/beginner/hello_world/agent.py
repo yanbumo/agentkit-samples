@@ -11,7 +11,7 @@ session_id = "veadk_playground_session_short_term_local"
 agent = Agent()
 short_term_memory = ShortTermMemory(
     backend="local"
-)  # 指定 local 后端，或直接 ShortTermMemory()
+)  
 
 runner = Runner(
     agent=agent, short_term_memory=short_term_memory, app_name=app_name, user_id=user_id

@@ -1,8 +1,14 @@
+import sys
+import os
 from veadk import Agent, Runner
 from veadk.memory.short_term_memory import ShortTermMemory
+from agentkit.apps import AgentkitAgentServerApp
+
+# Add current directory to Python path to support sub_agents imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from sub_agents.sequential_agent import sequential_service_agent
 from prompts import CUSTOMER_SERVICE_AGENT_PROMPT, PRE_PROCESS_AGENT_PROMPT
-from agentkit.apps import AgentkitAgentServerApp
 
 short_term_memory = ShortTermMemory(
     backend="local"

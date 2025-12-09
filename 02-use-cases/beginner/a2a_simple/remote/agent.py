@@ -1,57 +1,16 @@
 import random
 
-from veadk import Agent
+from veadk import Agent, Runner
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from google.adk.tools.tool_context import ToolContext
 from google.genai import types
+from agentkit.apps import AgentkitA2aApp
+from tools.roll_die import roll_die
+from tools.check_prime import check_prime
+from a2a.types import AgentCard, AgentProvider, AgentCapabilities, AgentSkill
+from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 
-
-def roll_die(sides: int, tool_context: ToolContext) -> int:
-  """Roll a die and return the rolled result.
-
-  Args:
-    sides: The integer number of sides the die has.
-    tool_context: the tool context
-  Returns:
-    An integer of the result of rolling the die.
-  """
-  result = random.randint(1, sides)
-  if not 'rolls' in tool_context.state:
-    tool_context.state['rolls'] = []
-
-  tool_context.state['rolls'] = tool_context.state['rolls'] + [result]
-  print(f"current round the result is {result}")
-  return result
-
-
-async def check_prime(nums: list[int]) -> str:
-  """Check if a given list of numbers are prime.
-
-  Args:
-    nums: The list of numbers to check.
-
-  Returns:
-    A str indicating which number is prime.
-  """
-  primes = set()
-  for number in nums:
-    number = int(number)
-    if number <= 1:
-      continue
-    is_prime = True
-    for i in range(2, int(number**0.5) + 1):
-      if number % i == 0:
-        is_prime = False
-        break
-    if is_prime:
-      primes.add(number)
-  return (
-      'No prime numbers found.'
-      if not primes
-      else f"{', '.join(str(num) for num in primes)} are prime numbers."
-  )
-
-
+a2a_app = AgentkitA2aApp()
 root_agent = Agent(
     name='hello_world_agent',
     description=(
@@ -80,6 +39,26 @@ root_agent = Agent(
     ]
 )
 
+runner = Runner(agent=root_agent)
+
+@a2a_app.agent_executor(runner=runner)
+class MyAgentExecutor(A2aAgentExecutor):
+    pass
+
+agent_card = AgentCard(
+  capabilities=AgentCapabilities(streaming=True),
+  description=root_agent.description,
+  name=root_agent.name,
+  defaultInputModes=["text"],
+  defaultOutputModes=["text"],
+  provider=AgentProvider(organization="agentkit", url=""),
+  skills=[AgentSkill(id="0", name="chat", description="Chat", tags=["chat"])],
+  url="0.0.0.0",
+  version="1.0.0",
+)
+
 print('agent start successfully ', root_agent.name)
 
-a2a_app = to_a2a(root_agent, port=8001)
+# a2a_app = to_a2a(root_agent, port=8001)
+if __name__ == '__main__':
+    a2a_app.run(agent_card=agent_card, host="0.0.0.0", port=8000)

@@ -16,6 +16,7 @@ import asyncio
 from veadk import Agent, Runner
 from veadk.knowledgebase.knowledgebase import KnowledgeBase
 from veadk.memory.short_term_memory import ShortTermMemory
+from agentkit.apps import AgentkitAgentServerApp
 
 # 准备多个知识源
 with open("/tmp/tech.txt", "w") as f:
@@ -28,7 +29,7 @@ kb = KnowledgeBase(backend="viking", app_name="test_app")
 kb.add_from_files(files=["/tmp/tech.txt", "/tmp/products.txt"])
 
 # 创建agent
-agent = Agent(
+root_agent = Agent(
     name="test_agent",
     knowledgebase=kb,
     instruction="You are a helpful assistant. Be concise and friendly.",
@@ -36,22 +37,18 @@ agent = Agent(
 
 # 运行
 runner = Runner(
-    agent=agent,
-    short_term_memory=ShortTermMemory(),
+    agent=root_agent,
     app_name="test_app",
     user_id="test_user",
 )
 
+short_term_memory = ShortTermMemory(backend="local")
 
-async def main():
-    session_id = "test_session"
-
-    query = "What is Python?"
-    answer = await runner.run(messages=query, session_id=session_id)
-    print(f"query: {query}\nanswer: {answer}")
-
+agent_server_app = AgentkitAgentServerApp(
+    agent=root_agent,
+    short_term_memory=short_term_memory,
+)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    agent_server_app.run(host="0.0.0.0", port=8000)
 
-root_agent = agent

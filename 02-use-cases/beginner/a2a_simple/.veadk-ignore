@@ -1,0 +1,3 @@
+# This directory contains an A2A agent that requires a remote service to be running first.
+# It is not suitable for loading in veadk web interface.
+# Please refer to the README.md for proper usage instructions.

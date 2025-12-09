@@ -1,0 +1,11 @@
+[project]
+name = "vikingmem-simple"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "google-adk>=1.20.0",
+    "veadk-python[extensions]>=0.2.28",
+    "agentkit-sdk-python==0.1.14",
+]
