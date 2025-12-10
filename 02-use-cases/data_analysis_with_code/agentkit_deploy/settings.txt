@@ -1,5 +1,5 @@
 # Ark (OpenAI compatible)
-ARK_API_KEY=29dc9508-87ae-4848-a1e1-7325f258a9fe
+ARK_API_KEY=
 
 # LAS Seedance Online
-LAS_API_KEY=b7912594-5e33-4d99-b0ed-df15a5cbc92c
+LAS_API_KEY=
