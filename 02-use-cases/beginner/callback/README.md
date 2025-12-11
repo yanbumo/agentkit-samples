@@ -204,7 +204,7 @@ export VOLCENGINE_ACCESS_KEY=<Your Access Key>
 export VOLCENGINE_SECRET_KEY=<Your Secret Key>
 
 # 基础部署（快速开始）
-veadk deploy --vefaas-app-name=callback_example --use-adk-web
+veadk deploy --vefaas-app-name=callback-example --use-adk-web
 
 # 生产级部署（推荐）
 veadk deploy \
