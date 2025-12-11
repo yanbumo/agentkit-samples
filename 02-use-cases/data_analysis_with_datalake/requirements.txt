@@ -6,4 +6,4 @@ lancedb
 agentkit-sdk-python
 volcengine-python-sdk[ark]
 pyarrow
-#duckdb
+duckdb
