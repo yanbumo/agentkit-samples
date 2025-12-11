@@ -15,22 +15,31 @@
 ## 🏗️ 架构
 
 ```
+方式一：直接客户端调用
 本地客户端 (local_client.py)
     ↓
 A2A 协议 (HTTP/JSONRPC)
     ↓
-远程 Agent 服务 (remote/agent.py)
+远程 Agent 服务 (remote/agent.py:8001)
     ├── roll_die 工具 (投掷骰子)
     │   └── 状态管理：rolls 历史
     │
     └── check_prime 工具 (检查质数)
+
+方式二：Agent 级联调用
+本地 Agent (agent.py:8000)
+    ├── add 工具 (加法)
+    └── RemoteVeAgent → 远程 Agent 服务 (remote/agent.py:8001)
+        ├── roll_die 工具 (投掷骰子)
+        └── check_prime 工具 (检查质数)
 ```
 
 ### 核心组件
 
 | 组件 | 描述 |
 |-----------|-------------|
-| **远程 Agent** | [remote/agent.py](remote/agent.py:14-40) - hello_world_agent，提供工具服务 |
+| **远程 Agent** | [remote/agent.py](remote/agent.py:14-40) - hello_world_agent，提供工具服务（端口 8001） |
+| **本地 Agent** | [agent.py](agent.py:16-21) - a2a_sample_agent，具有 add 工具和 sub_agents（端口 8000） |
 | **本地客户端** | [local_client.py](local_client.py) - A2ASimpleClient，调用远程服务 |
 | **工具：roll_die** | [remote/tools/roll_die.py](remote/tools/roll_die.py) - 投掷骰子 |
 | **工具：check_prime** | [remote/tools/check_prime.py](remote/tools/check_prime.py) - 检查质数 |
@@ -38,6 +47,16 @@ A2A 协议 (HTTP/JSONRPC)
 | **项目配置** | [remote/agentkit.yaml](remote/agentkit.yaml) - AgentKit 部署配置 |
 
 ### 代码特点
+
+**本地 Agent 定义**（[agent.py](agent.py:16-21)）：
+```python
+agent = Agent(
+    name="a2a_sample_agent",
+    instruction="You are a helpful assistant that can add numbers and delegate tasks to a remote agent that can roll dice and check prime numbers.",
+    tools=[add],
+    sub_agents=[remote_agent],
+)
+```
 
 **远程 Agent 定义**（[remote/agent.py](remote/agent.py:14-40)）：
 ```python
@@ -67,7 +86,7 @@ agent_card = AgentCard(
   defaultOutputModes=["text"],
   provider=AgentProvider(organization="agentkit", url=""),
   skills=[AgentSkill(id="0", name="chat", description="Chat", tags=["chat"])],
-  url="0.0.0.0",
+  url="http://localhost:8001",
   version="1.0.0",
 )
 ```
@@ -208,6 +227,20 @@ cd 02-use-cases/beginner/a2a_simple
 python local_client.py
 ```
 
+**步骤 3（可选）：启动本地 Agent 服务**
+```bash
+# 在终端窗口 3 中运行（需要先启动远程 Agent）
+cd 02-use-cases/beginner/a2a_simple
+python agent.py
+
+# 服务启动后，可访问 Agent Card
+# http://localhost:8000/.well-known/agent-card.json
+```
+
+此时您有两个 Agent 服务：
+- **远程 Agent**（端口 8001）：提供 roll_die 和 check_prime 工具
+- **本地 Agent**（端口 8000）：提供 add 工具，并可调用远程 Agent
+
 #### 方式四：部署到火山引擎 veFaaS
 
 **安全提示**：
@@ -293,9 +326,10 @@ No prime numbers found.
 
 ```
 a2a_simple/
+├── agent.py                 # 本地 Agent 服务（端口 8000，可调用远程 Agent）
 ├── local_client.py          # A2A 客户端实现
 ├── remote/                  # 远程 Agent 服务
-│   ├── agent.py            # Agent 定义和 A2A App
+│   ├── agent.py            # Agent 定义和 A2A App（端口 8001）
 │   ├── agentkit.yaml       # AgentKit 部署配置
 │   ├── requirements.txt    # Python 依赖
 │   ├── Dockerfile          # Docker 镜像构建
@@ -326,7 +360,11 @@ Agent Card 提供以下信息：
 
 访问方式：
 ```
+# 远程 Agent Card
 http://localhost:8001/.well-known/agent-card.json
+
+# 本地 Agent Card（如果启动了 agent.py）
+http://localhost:8000/.well-known/agent-card.json
 ```
 
 ### 工具状态管理
@@ -342,10 +380,42 @@ tool_context.state['rolls'] = tool_context.state['rolls'] + [result]
 
 ### 远程调用流程
 
+**方式一：直接客户端调用（local_client.py）**
 1. **获取 Agent Card**：了解远程 Agent 的能力
 2. **创建客户端**：基于 Agent Card 创建 A2A 客户端
 3. **发送消息**：通过 A2A 协议发送请求
 4. **接收响应**：处理远程 Agent 的响应
+
+**方式二：Agent 级联调用（agent.py）**
+1. **定义 RemoteVeAgent**：配置远程 Agent 的 URL
+2. **注册为 sub_agents**：将远程 Agent 注册到本地 Agent
+3. **自动路由**：本地 Agent 自动将任务委派给合适的 Agent
+4. **统一接口**：对外提供统一的 A2A 接口
+
+### Agent 级联（Sub-Agents）
+
+通过 `sub_agents` 参数，可以构建 Agent 级联架构：
+
+```python
+from veadk.a2a.remote_ve_agent import RemoteVeAgent
+
+remote_agent = RemoteVeAgent(
+    name="a2a_agent",
+    url="http://localhost:8001/",
+)
+
+agent = Agent(
+    name="a2a_sample_agent",
+    tools=[add],
+    sub_agents=[remote_agent],  # 级联远程 Agent
+)
+```
+
+**优势**：
+- 本地 Agent 可以同时使用本地工具和远程 Agent 的工具
+- 自动处理工具路由和调用
+- 支持多个远程 Agent 级联
+- 对外暴露统一的 A2A 接口
 
 ### AgentKit A2A App
 

@@ -53,7 +53,7 @@ agent_card = AgentCard(
   defaultOutputModes=["text"],
   provider=AgentProvider(organization="agentkit", url=""),
   skills=[AgentSkill(id="0", name="chat", description="Chat", tags=["chat"])],
-  url="0.0.0.0",
+  url="http://localhost:8001",
   version="1.0.0",
 )
 
@@ -61,4 +61,4 @@ print('agent start successfully ', root_agent.name)
 
 # a2a_app = to_a2a(root_agent, port=8001)
 if __name__ == '__main__':
-    a2a_app.run(agent_card=agent_card, host="0.0.0.0", port=8000)
+    a2a_app.run(agent_card=agent_card, host="0.0.0.0", port=8001)
