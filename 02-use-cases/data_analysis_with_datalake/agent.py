@@ -1,12 +1,3 @@
-'''
-Author: haoxingjun
-Date: 2025-12-15 21:21:14
-Email: haoxingjun@bytedance.com
-LastEditors: haoxingjun
-LastEditTime: 2025-12-15 21:21:46
-Description: file information
-Company: ByteDance
-'''
 # 导入所有必要的模块
 import os
 import sys
