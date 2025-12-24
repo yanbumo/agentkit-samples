@@ -32,10 +32,6 @@ knowledgebase = KnowledgeBase(backend="local", index="aiops_kb", top_k=3)
 file_path = os.path.join(os.path.dirname(__file__), "sop_aiops.md")
 knowledgebase.add_from_files(files=[file_path])
 
-my_memory_collection = os.getenv(
-    "DATABASE_VIKINGMEM_COLLECTION", "default_memory_collection"
-)
-
 ### control center mcp server
 server_parameters = StdioServerParameters(
     command="uvx",
