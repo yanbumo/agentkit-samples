@@ -30,7 +30,7 @@ agent: Agent = Agent(
     instruction="你是一个资深软件工程师，在沙箱里执行生产的代码， 避免每次安装检查, 可以使用python lib akshare 下载相关的股票数据。使用uv 来安装依赖。运行代码超时可以考虑调整超时时间。可以通过web_search工具搜索相关公司的经营数据。如果缺失了依赖库, 通过python代码为沙箱安装缺失的依赖库。",
     tools=[run_code, web_search],
     planner=PlanReActPlanner(),
-    before_model_callback=content_safety.before_model_callback, 
+    before_model_callback=content_safety.before_model_callback,
     after_model_callback=content_safety.after_model_callback,
     before_tool_callback=content_safety.before_tool_callback,
     after_tool_callback=content_safety.after_tool_callback,
@@ -42,7 +42,8 @@ agent: Agent = Agent(
 root_agent = agent
 
 agent_server_app = AgentkitAgentServerApp(
-    agent=agent, short_term_memory=short_term_memory,  
+    agent=agent,
+    short_term_memory=short_term_memory,
 )
 
 if __name__ == "__main__":
