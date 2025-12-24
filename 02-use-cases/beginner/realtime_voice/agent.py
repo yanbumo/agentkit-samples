@@ -15,6 +15,7 @@ import traceback
 from google.adk.agents import LiveRequestQueue
 
 from veadk import Agent, Runner
+from veadk.realtime import DoubaoRealtimeVoice
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
